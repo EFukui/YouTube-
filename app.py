@@ -1,49 +1,40 @@
 import streamlit as st
-import re
+from newspaper import Article
+import openai
 
-# 字幕取得
-from youtube_transcript_api import YouTubeTranscriptApi
+# OpenAI APIキー設定（安全な保存が必要です）
+openai.api_key = st.secrets["OPENAI_API_KEY"]  # Streamlit Secretから読み込みを推奨
 
-# 要約モデル
-from transformers import pipeline
+st.set_page_config(page_title="News Digest - 記事要約アプリ")
 
-st.set_page_config(page_title="YouTube字幕要約アプリ", page_icon="🎬")
-st.title("🎬 YouTube字幕要約アプリ")
-st.markdown("YouTubeのURLを入力してください（例：[https://www.youtube.com/watch?v=xxxxxxxxxxx](https://www.youtube.com/watch?v=xxxxxxxxxxx)）")
+st.title("📰 News Digest - 記事要約アプリ")
+st.write("ニュース記事のURLを入力してください（例：https://www.bbc.com/news/...）")
 
-# 入力
-url = st.text_input("")
-
-# video_id 抽出関数
-def extract_video_id(url):
-    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
-    return match.group(1) if match else None
+url = st.text_input("記事URL")
 
 if url:
-    video_id = extract_video_id(url)
-    if not video_id:
-        st.error("❌ video_id を抽出できませんでした。URLを確認してください。")
-    else:
-        st.success(f"✅ 抽出された video_id: {video_id}")
-        
-        # 字幕取得
+    with st.spinner("記事を読み込んで要約中..."):
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja", "en"])
-            full_text = " ".join([item["text"] for item in transcript])
-            st.subheader("📄 字幕（全文）")
-            st.write(full_text)
-        except Exception as e:
-            st.error(f"字幕取得に失敗しました：{e}")
-            full_text = None
+            # 記事を抽出
+            article = Article(url)
+            article.download()
+            article.parse()
+            content = article.text
+            title = article.title
 
-        # 要約
-        if full_text:
-            st.subheader("🧠 要約中...")
-            try:
-                summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-                summary = summarizer(full_text, max_length=120, min_length=30, do_sample=False)
-                st.success("✅ 要約完了")
-                st.subheader("📝 要約結果")
-                st.write(summary[0]["summary_text"])
-            except Exception as e:
-                st.error(f"要約に失敗しました：{e}")
+            # GPTに要約させる
+            prompt = f"以下の記事を日本語で簡潔に3行で要約してください：\n\n{content}"
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=500
+            )
+            summary = response['choices'][0]['message']['content']
+
+            st.success(f"📰 タイトル：{title}")
+            st.markdown("### ✅ 要約結果")
+            st.markdown(summary)
+
+        except Exception as e:
+            st.error(f"要約に失敗しました: {e}")
