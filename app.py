@@ -1,34 +1,32 @@
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
-from transformers import pipeline
-import re
+from urllib.parse import urlparse, parse_qs
+
+st.set_page_config(page_title="YouTube字幕要約アプリ")
 
 st.title("🎬 YouTube字幕要約アプリ")
-st.write("YouTubeのURLを入力してください（例： https://www.youtube.com/watch?v=xxxxxxxxxxx）")
+st.markdown("YouTubeのURLを入力してください（例：[https://www.youtube.com/watch?v=xxxxxxxxxxx](https://www.youtube.com/watch?v=xxxxxxxxxxx)）")
 
-# 入力欄
+# 入力フォーム
 url = st.text_input("")
 
+# ▶️ 動画IDを抽出する関数
 def extract_video_id(url):
-    match = re.search(r"v=([\w-]+)", url)
-    if match:
-        return match.group(1)
-    return None
-
-if url:
     try:
-        video_id = extract_video_id(url)
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ja', 'en'])
+        if "youtu.be" in url:
+            return url.split("/")[-1].split("?")[0]
+        elif "youtube.com" in url:
+            query = parse_qs(urlparse(url).query)
+            return query.get("v", [None])[0]
+        else:
+            return None
+    except:
+        return None
 
-        # 字幕を結合
-        text = " ".join([entry['text'] for entry in transcript])
-
-        # 要約処理
-        summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-        summary = summarizer(text, max_length=200, min_length=60, do_sample=False)
-
-        st.subheader("📝 要約")
-        st.write(summary[0]['summary_text'])
-
-    except Exception as e:
-        st.error(f"エラーが発生しました: {str(e)}")
+# 処理
+if url:
+    video_id = extract_video_id(url)
+    if isinstance(video_id, str) and video_id:
+        st.success(f"✅ 抽出された video_id: `{video_id}`")
+        # ※ ここに字幕取得・要約処理を追加できます
+    else:
+        st.error("エラーが発生しました：`video_id` が取得できませんでした。URLを確認してください。")
