@@ -1,36 +1,29 @@
 import streamlit as st
-import requests
 from newspaper import Article
 from transformers import pipeline
 
-st.set_page_config(page_title="Web記事要約アプリ", layout="centered")
-st.title("📰 Web記事要約アプリ")
+st.set_page_config(page_title="記事要約アプリ")
 
-url = st.text_input("記事のURLを入力してください（例：https://example.com/article）")
+st.title("📰 Web記事要約アプリ")
+url = st.text_input("記事のURLを入力してください")
 
 if url:
     try:
-        # 記事本文を取得
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        # 記事抽出
+        article = Article(url)
+        article.download()
+        article.parse()
+        article_text = article.text
 
-        # タイトル + 本文の取得（シンプル版）
-        title = soup.title.string if soup.title else ""
-        paragraphs = soup.find_all("p")
-        article = "\n".join(p.get_text() for p in paragraphs)
+        st.subheader("📄 記事本文（抽出結果）")
+        st.write(article_text)
 
-        if len(article.strip()) < 200:
-            st.error("記事の本文が十分に取得できませんでした。")
-        else:
-            st.success("記事本文を取得しました。要約中...")
+        # 要約処理
+        summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+        summary = summarizer(article_text, max_length=200, min_length=30, do_sample=False)
 
-            # 要約（HuggingFace Transformers）
-            summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-            summary = summarizer(article, max_length=200, min_length=60, do_sample=False)[0]['summary_text']
-
-            st.subheader("📝 要約結果")
-            st.write(summary)
+        st.subheader("✂ 要約結果")
+        st.write(summary[0]['summary_text'])
 
     except Exception as e:
-        st.error(f"記事の取得または要約に失敗しました：{e}")
+        st.error(f"記事の取得または要約に失敗しました：{str(e)}")
