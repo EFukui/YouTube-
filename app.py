@@ -1,40 +1,36 @@
 import streamlit as st
-from newspaper import Article
-import openai
+import requests
+from bs4 import BeautifulSoup
+from transformers import pipeline
 
-# OpenAI APIキー設定（安全な保存が必要です）
-openai.api_key = st.secrets["OPENAI_API_KEY"]  # Streamlit Secretから読み込みを推奨
+st.set_page_config(page_title="Web記事要約アプリ", layout="centered")
+st.title("📰 Web記事要約アプリ")
 
-st.set_page_config(page_title="News Digest - 記事要約アプリ")
-
-st.title("📰 News Digest - 記事要約アプリ")
-st.write("ニュース記事のURLを入力してください（例：https://www.bbc.com/news/...）")
-
-url = st.text_input("記事URL")
+url = st.text_input("記事のURLを入力してください（例：https://example.com/article）")
 
 if url:
-    with st.spinner("記事を読み込んで要約中..."):
-        try:
-            # 記事を抽出
-            article = Article(url)
-            article.download()
-            article.parse()
-            content = article.text
-            title = article.title
+    try:
+        # 記事本文を取得
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
 
-            # GPTに要約させる
-            prompt = f"以下の記事を日本語で簡潔に3行で要約してください：\n\n{content}"
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=500
-            )
-            summary = response['choices'][0]['message']['content']
+        # タイトル + 本文の取得（シンプル版）
+        title = soup.title.string if soup.title else ""
+        paragraphs = soup.find_all("p")
+        article = "\n".join(p.get_text() for p in paragraphs)
 
-            st.success(f"📰 タイトル：{title}")
-            st.markdown("### ✅ 要約結果")
-            st.markdown(summary)
+        if len(article.strip()) < 200:
+            st.error("記事の本文が十分に取得できませんでした。")
+        else:
+            st.success("記事本文を取得しました。要約中...")
 
-        except Exception as e:
-            st.error(f"要約に失敗しました: {e}")
+            # 要約（HuggingFace Transformers）
+            summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+            summary = summarizer(article, max_length=200, min_length=60, do_sample=False)[0]['summary_text']
+
+            st.subheader("📝 要約結果")
+            st.write(summary)
+
+    except Exception as e:
+        st.error(f"記事の取得または要約に失敗しました：{e}")
