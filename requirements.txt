@@ -1,4 +1,4 @@
-# requirements.txt
 streamlit
+transformers
 newspaper3k
-openai
+lxml==4.9.3
