@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
+from newspaper import Article
 from transformers import pipeline
 
 st.set_page_config(page_title="Web記事要約アプリ", layout="centered")
