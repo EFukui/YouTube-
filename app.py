@@ -1,29 +1,30 @@
 import streamlit as st
-from newspaper import Article
-from transformers import pipeline
+import requests
+from bs4 import BeautifulSoup
+from gensim.summarization import summarize
 
-st.set_page_config(page_title="記事要約アプリ")
+st.title("📰 記事要約アプリ")
 
-st.title("📰 Web記事要約アプリ")
 url = st.text_input("記事のURLを入力してください")
 
 if url:
     try:
-        # 記事抽出
-        article = Article(url)
-        article.download()
-        article.parse()
-        article_text = article.text
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
 
-        st.subheader("📄 記事本文（抽出結果）")
-        st.write(article_text)
+        # 本文抽出：pタグの内容を連結
+        paragraphs = soup.find_all("p")
+        text = "\n".join(p.get_text() for p in paragraphs if p.get_text())
 
-        # 要約処理
-        summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-        summary = summarizer(article_text, max_length=200, min_length=30, do_sample=False)
+        if len(text) < 500:
+            st.warning("本文が短すぎて要約できません。")
+        else:
+            st.subheader("📄 本文の一部")
+            st.write(text[:1000] + "...")
 
-        st.subheader("✂ 要約結果")
-        st.write(summary[0]['summary_text'])
+            summary = summarize(text, ratio=0.2)
+            st.subheader("✂️ 要約")
+            st.write(summary)
 
     except Exception as e:
-        st.error(f"記事の取得または要約に失敗しました：{str(e)}")
+        st.error(f"エラーが発生しました: {e}")
